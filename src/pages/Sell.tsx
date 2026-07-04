@@ -29,7 +29,8 @@ export default function Sell() {
   const [searchTerm, setSearchTerm] = useState('')
   const [clientResults, setClientResults] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [isSearchingClient, setIsSearchingClient] = useState(false)
+  const [_isSearchingClient, setIsSearchingClient] = useState(false)
+
 
   // Manage Products State
   const [isManageMode, setIsManageMode] = useState(false)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { ArrowLeft, User, Calendar, Plus, Clock, CreditCard, X } from 'lucide-react'
+import { ArrowLeft, User, Plus, CreditCard, X } from 'lucide-react'
 
 export default function ClientProfile() {
   const { id } = useParams()
