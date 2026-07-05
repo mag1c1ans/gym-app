@@ -1,13 +1,14 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, CheckSquare, ShoppingCart, Users, Menu } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, ShoppingCart, Users, TrendingUp } from 'lucide-react'
 
 export default function NavBar() {
+  // We swapped the 'Menu' icon out for the 'TrendingUp' icon to point to your new Reports page
   const navItems = [
     { name: 'Головна', path: '/', icon: LayoutDashboard },
     { name: 'Візити', path: '/check-in', icon: CheckSquare },
     { name: 'Продаж', path: '/sell', icon: ShoppingCart },
     { name: 'Клієнти', path: '/clients', icon: Users },
-    { name: 'Більше', path: '/more', icon: Menu },
+    { name: 'Звіти', path: '/reports', icon: TrendingUp }, 
   ]
 
   return (

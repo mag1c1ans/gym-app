@@ -3,12 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { Search, Plus, User, X } from 'lucide-react'
 
+// 1. Updated Interface to include memberships
 interface Client {
   id: string
   full_name: string
   email: string
   phone: string
   active: boolean
+  client_memberships?: { end_date: string }[] 
+}
+
+// 2. Added Helper Function to check dates
+function isActive(client: Client) {
+  const today = new Date().toISOString().split('T')[0]
+  if (!client.client_memberships) return false
+  return client.client_memberships.some(m => m.end_date >= today)
 }
 
 export default function Clients() {
@@ -24,11 +33,17 @@ export default function Clients() {
     fetchClients()
   }, [])
 
+  // 3. Updated fetch query to pull the membership end_date
   async function fetchClients() {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select(`
+          *,
+          client_memberships (
+            end_date
+          )
+        `)
         .order('full_name')
       
       if (error) throw error
@@ -110,8 +125,9 @@ export default function Clients() {
                   <h3 className="font-semibold text-gray-900">{client.full_name}</h3>
                   <p className="text-sm text-gray-500">{client.email || client.phone || 'Немає контактних даних'}</p>
                 </div>
-                <span className={`px-2 py-1 text-xs rounded-full font-medium ${client.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {client.active ? 'Активний' : 'Неактивний'}
+                {/* 4. Updated the status span to use the isActive function */}
+                <span className={`px-2 py-1 text-xs rounded-full font-medium ${isActive(client) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {isActive(client) ? 'Активний' : 'Неактивний'}
                 </span>
               </div>
             ))}

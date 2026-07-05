@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { supabase } from './lib/supabaseClient'
 import NavBar from './components/NavBar'
+import Reports from './pages/Reports'
 
 // Import all your real pages
 import Dashboard from './pages/Dashboard'
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="/clients" element={<Clients />} />
             <Route path="/more" element={<More />} />
             <Route path="/client/:id" element={<ClientProfile />} />
+            <Route path="/reports" element={<Reports />} />
           </Routes>
         </main>
         
