@@ -44,16 +44,30 @@ export default function Dashboard() {
 
       if (checkInCount !== null) setTodayCheckIns(checkInCount)
 
-      // 2. Fetch Today's Revenue from Purchases
+      // 2. Fetch Today's Revenue (Purchases + Memberships)
+      let combinedRevenue = 0
+
+      // 2a. Product Purchases
       const { data: purchases } = await supabase
         .from('purchases')
         .select('total_price')
         .gte('purchased_at', todayISO)
 
       if (purchases) {
-        const revenue = purchases.reduce((sum, record) => sum + Number(record.total_price), 0)
-        setTodayRevenue(revenue)
+        combinedRevenue += purchases.reduce((sum, record) => sum + Number(record.total_price || 0), 0)
       }
+
+      // 2b. Membership Purchases
+      const { data: memberships } = await supabase
+        .from('client_memberships')
+        .select('amount_paid')
+        .gte('created_at', todayISO)
+
+      if (memberships) {
+        combinedRevenue += memberships.reduce((sum, record) => sum + Number(record.amount_paid || 0), 0)
+      }
+
+      setTodayRevenue(combinedRevenue)
 
       // 3. Fetch Expiring Memberships
       const { data: expiring } = await supabase
