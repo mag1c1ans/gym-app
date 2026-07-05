@@ -90,7 +90,6 @@ export default function Sell() {
       const existingItem = prevCart.find(i => i.id === item.id)
       
       if (existingItem) {
-        // Prevent adding more than what's in stock
         if (item.category === 'product' && existingItem.quantity >= (item.stock_quantity || 0)) {
           alert('Досягнуто ліміту залишку на складі!')
           return prevCart
@@ -106,7 +105,6 @@ export default function Sell() {
       return prevCart.map(item => {
         if (item.id === id) {
           const newQuantity = item.quantity + delta
-          // Block exceeding stock limit in the cart
           if (item.category === 'product' && delta > 0 && newQuantity > (item.stock_quantity || 0)) {
             alert('Недостатньо на складі!')
             return item
@@ -125,32 +123,29 @@ export default function Sell() {
 
   async function handleSaveRecord() {
     if (cart.length === 0) return
-    if (currentDebt > 0 && !selectedClient) {
-      return alert('Щоб записати борг, необхідно обрати клієнта!')
+    // MANDATORY CLIENT CHECK: Block the sale completely if no client is selected
+    if (!selectedClient) {
+      return alert('Будь ласка, оберіть клієнта для оформлення продажу!')
     }
 
     setIsSaving(true)
     
-    // We will distribute the debt sequentially across the items in the cart so the database accepts it
     let remainingDebtToDistribute = currentDebt > 0 ? currentDebt : 0
 
     try {
       for (const item of cart) {
         const itemLineTotal = item.price * item.quantity
-        
-        // Calculate how much debt to assign to this specific item row
         const assignedDebt = Math.min(remainingDebtToDistribute, itemLineTotal)
         remainingDebtToDistribute -= assignedDebt
 
         if (item.category === 'membership') {
-          // Process Memberships
           for (let i = 0; i < item.quantity; i++) {
             const startDate = new Date()
             const endDate = new Date()
             endDate.setDate(startDate.getDate() + (item.duration_days || 30))
 
             const { error: memErr } = await supabase.from('client_memberships').insert({
-              client_id: selectedClient?.id,
+              client_id: selectedClient.id,
               membership_type_id: item.id,
               start_date: startDate.toISOString().split('T')[0],
               end_date: endDate.toISOString().split('T')[0],
@@ -160,9 +155,8 @@ export default function Sell() {
             if (memErr) throw memErr
           }
         } else {
-          // Process Products
           const { error: prodErr } = await supabase.from('purchases').insert({
-            client_id: selectedClient?.id || null,
+            client_id: selectedClient.id,
             product_id: item.id,
             quantity: item.quantity,
             unit_price: item.price,
@@ -171,7 +165,6 @@ export default function Sell() {
           })
           if (prodErr) throw prodErr
 
-          // Decrement Inventory safely
           const newStock = (item.stock_quantity || 0) - item.quantity
           const { error: stockErr } = await supabase
             .from('products')
@@ -185,7 +178,7 @@ export default function Sell() {
       setCart([]) 
       setSelectedClient(null)
       setAmountPaid('')
-      fetchCatalog() // Refresh inventory numbers in the grid
+      fetchCatalog() 
     } catch (error) {
       console.error('Помилка при збереженні:', error)
       alert('Помилка при збереженні запису. Перевірте зʼєднання.')
@@ -244,13 +237,13 @@ export default function Sell() {
         
         {/* Client Search */}
         <div className="mb-4">
-          <h2 className="font-bold text-sm text-gray-500 uppercase tracking-wider mb-2">Клієнт</h2>
+          <h2 className="font-bold text-sm text-gray-500 uppercase tracking-wider mb-2">Клієнт *</h2>
           {!selectedClient ? (
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Пошук клієнта (необов'язково)..."
+                placeholder="Пошук клієнта (обов'язково)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
@@ -346,7 +339,8 @@ export default function Sell() {
 
         <button
           onClick={handleSaveRecord}
-          disabled={cart.length === 0 || isSaving || (currentDebt > 0 && !selectedClient)}
+          // BUTTON REMAINS DISABLED IF NO CLIENT IS SELECTED
+          disabled={cart.length === 0 || isSaving || !selectedClient}
           className="w-full bg-green-600 text-white font-bold py-4 rounded-xl hover:bg-green-700 active:bg-green-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSaving ? 'Збереження...' : 'Підтвердити продаж'}
