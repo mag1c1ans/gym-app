@@ -23,12 +23,10 @@ export default function CheckIn() {
   const [recentCheckIns, setRecentCheckIns] = useState<CheckInRecord[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Load today's check-ins when the page opens
   useEffect(() => {
     fetchRecentCheckIns()
   }, [])
 
-  // Auto-search when typing
   useEffect(() => {
     if (searchTerm.length > 1) {
       searchClients()
@@ -49,7 +47,6 @@ export default function CheckIn() {
       .limit(15)
 
     if (!error && data) {
-      // Supabase nested joins need a slight type cast
       setRecentCheckIns(data as unknown as CheckInRecord[])
     }
   }
@@ -59,7 +56,7 @@ export default function CheckIn() {
     const { data, error } = await supabase
       .from('clients')
       .select('id, full_name, phone, active')
-      .eq('active', true) // Only allow active clients to check in
+      .eq('active', true)
       .or(`full_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
       .limit(5)
 
@@ -69,16 +66,23 @@ export default function CheckIn() {
     setLoading(false)
   }
 
+  // CORRECTED: Explicitly inserting the client_id and current timestamp
   async function handleCheckIn(clientId: string) {
     const { error } = await supabase
       .from('check_ins')
-      .insert([{ client_id: clientId }])
+      .insert([
+        { 
+          client_id: clientId,
+          checked_in_at: new Date().toISOString() 
+        }
+      ])
 
     if (!error) {
-      setSearchTerm('') // Clear search
-      setClients([]) // Hide search results
-      fetchRecentCheckIns() // Refresh the recent list
+      setSearchTerm('') 
+      setClients([]) 
+      fetchRecentCheckIns() 
     } else {
+      console.error('Check-in error:', error)
       alert('Помилка реєстрації візиту.')
     }
   }
@@ -88,25 +92,22 @@ export default function CheckIn() {
   }
 
   return (
-    <div className="p-6 h-full flex flex-col bg-gray-50">
+    <div className="p-6 h-full flex flex-col bg-gray-50 pb-20">
       <h1 className="text-2xl font-bold mb-6">Реєстрація візиту</h1>
 
-      {/* Search Input */}
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
         <input
           type="text"
-          placeholder="Пошук клієнта (ім'я або телефон)..."
+          placeholder="Пошук клієнта..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-4 bg-white border border-gray-200 shadow-sm rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-lg"
         />
       </div>
 
-      {/* Search Results Dropdown */}
       {searchTerm.length > 1 && (
         <div className="mb-8">
-          <h2 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Результати пошуку</h2>
           {loading ? (
             <p className="text-gray-500 pl-2">Шукаємо...</p>
           ) : clients.length === 0 ? (
@@ -121,9 +122,8 @@ export default function CheckIn() {
                 >
                   <div>
                     <div className="font-bold text-gray-900 text-lg">{client.full_name}</div>
-                    <div className="text-sm text-gray-500">{client.phone || 'Немає телефону'}</div>
                   </div>
-                  <div className="bg-blue-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-blue-600 text-white p-2 rounded-full">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                 </button>
@@ -133,21 +133,18 @@ export default function CheckIn() {
         </div>
       )}
 
-      {/* Today's Recent Check-ins */}
       <div className="flex-1">
         <h2 className="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider flex items-center gap-2">
           <Clock className="w-4 h-4" /> Останні візити сьогодні
         </h2>
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
           {recentCheckIns.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
-              Сьогодні ще немає візитів.
-            </div>
+            <div className="p-6 text-center text-gray-500">Сьогодні ще немає візитів.</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {recentCheckIns.map(record => (
                 <div key={record.id} className="p-4 flex justify-between items-center">
-                  <span className="font-medium text-gray-900">{record.clients.full_name}</span>
+                  <span className="font-medium text-gray-900">{record.clients?.full_name || 'Невідомий'}</span>
                   <span className="text-sm text-gray-500 bg-gray-50 px-3 py-1 rounded-full">
                     {formatTime(record.checked_in_at)}
                   </span>
