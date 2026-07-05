@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { Download, TrendingUp, Calendar, FileSpreadsheet } from 'lucide-react'
+import { Download, TrendingUp, Calendar } from 'lucide-react'
 
 interface MonthlyReport {
   monthId: string
@@ -13,6 +13,7 @@ export default function Reports() {
   const [reportData, setReportData] = useState<MonthlyReport[]>([])
   const [loading, setLoading] = useState(true)
   const [totalRevenue, setTotalRevenue] = useState(0)
+  const [dbError, setDbError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchFinancials()
@@ -20,58 +21,58 @@ export default function Reports() {
 
   async function fetchFinancials() {
     try {
-      // Fetch all paid memberships
+      // If you haven't created an 'amount_paid' column yet, this will fail safely now
       const { data, error } = await supabase
         .from('client_memberships')
-        .select('start_date, amount_paid')
+        .select('*')
         .order('start_date', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        setDbError(error.message)
+        return
+      }
 
       let total = 0
       const monthlyGroups: Record<string, MonthlyReport> = {}
 
-      // Group the data by Year-Month
       data?.forEach(sale => {
-        if (!sale.amount_paid) return
+        // Fallback to 0 if amount_paid doesn't exist in your database yet
+        const amount = sale.amount_paid || 0
         
-        const date = new Date(sale.start_date)
-        const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` // e.g., "2026-08"
+        const date = sale.start_date ? new Date(sale.start_date) : new Date()
+        const monthId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         const label = date.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' })
         
         if (!monthlyGroups[monthId]) {
           monthlyGroups[monthId] = { monthId, label, revenue: 0, salesCount: 0 }
         }
         
-        monthlyGroups[monthId].revenue += sale.amount_paid
+        monthlyGroups[monthId].revenue += amount
         monthlyGroups[monthId].salesCount += 1
-        total += sale.amount_paid
+        total += amount
       })
 
-      // Convert object to array and sort by newest month first
       const sortedReports = Object.values(monthlyGroups).sort((a, b) => b.monthId.localeCompare(a.monthId))
       
       setReportData(sortedReports)
       setTotalRevenue(total)
-    } catch (error) {
-      console.error('Помилка завантаження фінансів:', error)
+    } catch (error: any) {
+      setDbError(error.message || 'Невідома помилка')
     } finally {
       setLoading(false)
     }
   }
 
-  // Generate and download the CSV file
   function exportToCSV() {
     const headers = ['Місяць', 'Рік', 'Кількість продажів', 'Дохід (UAH)']
     
     const csvRows = reportData.map(row => {
-      const [year, month] = row.monthId.split('-')
+      const [year] = row.monthId.split('-')
       return `"${row.label}","${year}","${row.salesCount}","${row.revenue}"`
     })
 
     const csvContent = [headers.join(','), ...csvRows].join('\n')
     
-    // Add BOM (\uFEFF) to ensure Excel reads Ukrainian Cyrillic characters correctly
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     
@@ -93,11 +94,17 @@ export default function Reports() {
           onClick={exportToCSV}
           className="bg-green-600 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 hover:bg-green-700 transition-colors shadow-sm"
         >
-          <FileSpreadsheet className="w-5 h-5" /> Експорт CSV
+          <Download className="w-5 h-5" /> Експорт CSV
         </button>
       </div>
 
-      {/* Lifetime Overview Card */}
+      {dbError && (
+        <div className="bg-red-100 text-red-700 p-4 rounded-xl mb-6 text-sm">
+          <strong>Помилка бази даних:</strong> {dbError}. 
+          <br/>(Переконайтеся, що таблиця client_memberships має колонку 'amount_paid')
+        </div>
+      )}
+
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-6 text-white shadow-lg mb-8">
         <div className="flex items-center gap-3 mb-2 opacity-80">
           <TrendingUp className="w-5 h-5" />
@@ -106,7 +113,6 @@ export default function Reports() {
         <div className="text-4xl font-bold">{totalRevenue.toLocaleString('uk-UA')} ₴</div>
       </div>
 
-      {/* Monthly Breakdown Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-gray-500" />
@@ -136,7 +142,7 @@ export default function Reports() {
                   </td>
                 </tr>
               ))}
-              {reportData.length === 0 && (
+              {reportData.length === 0 && !dbError && (
                 <tr>
                   <td colSpan={3} className="p-8 text-center text-gray-500">
                     Ще немає даних про продажі.
