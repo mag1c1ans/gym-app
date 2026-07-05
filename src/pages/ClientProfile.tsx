@@ -1,185 +1,193 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { ArrowLeft, User, Plus, CreditCard, X } from 'lucide-react'
+import { ArrowLeft, User, Edit, Trash2, X, Phone, Mail } from 'lucide-react'
+
+interface Client {
+  id: string
+  full_name: string
+  email: string
+  phone: string
+}
 
 export default function ClientProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
-  
-  const [client, setClient] = useState<any>(null)
-  const [activeMembership, setActiveMembership] = useState<any>(null)
-  const [plans, setPlans] = useState<any[]>([])
+  const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedPlanId, setSelectedPlanId] = useState('')
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (id) {
-      fetchClientData()
-      fetchPlans()
-    }
+    if (id) fetchClient()
   }, [id])
 
-  async function fetchClientData() {
-    // Fetch basic info
-    const { data: clientData } = await supabase.from('clients').select('*').eq('id', id).single()
-    if (clientData) setClient(clientData)
-
-    // Fetch active membership (end_date >= today)
-    const today = new Date().toISOString().split('T')[0]
-    const { data: membershipData } = await supabase
-      .from('client_memberships')
-      .select('*, membership_types(name)')
-      .eq('client_id', id)
-      .gte('end_date', today)
-      .order('end_date', { ascending: false })
-      .limit(1)
-      .single()
-      
-    setActiveMembership(membershipData || null)
-    setLoading(false)
-  }
-
-  async function fetchPlans() {
-    const { data } = await supabase.from('membership_types').select('*').eq('active', true).order('price')
-    if (data) setPlans(data)
-  }
-
-  async function handleAssignMembership(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedPlanId) return
-    setIsSubmitting(true)
-
-    const plan = plans.find(p => p.id === selectedPlanId)
-    if (!plan) return
-
-    const startDate = new Date()
-    const endDate = new Date()
-    endDate.setDate(startDate.getDate() + plan.duration_days)
-
+  async function fetchClient() {
     try {
-      const { error } = await supabase.from('client_memberships').insert([{
-        client_id: id,
-        membership_type_id: plan.id,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        amount_paid: plan.price
-      }])
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (error) throw error
+      if (data) {
+        setClient(data)
+        setEditForm({ full_name: data.full_name || '', email: data.email || '', phone: data.phone || '' })
+      }
+    } catch (error) {
+      console.error('Помилка завантаження клієнта:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleUpdateClient(e: React.FormEvent) {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          full_name: editForm.full_name,
+          email: editForm.email,
+          phone: editForm.phone
+        })
+        .eq('id', id)
 
       if (error) throw error
       
-      setIsModalOpen(false)
-      fetchClientData() // Refresh profile
+      setClient({ ...client, ...editForm } as Client)
+      setIsEditModalOpen(false)
     } catch (error) {
-      console.error(error)
-      alert('Помилка призначення абонемента.')
+      console.error('Помилка оновлення клієнта:', error)
+      alert('Не вдалося оновити дані клієнта.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })
+  async function handleDeleteClient() {
+    const isConfirmed = window.confirm('Ви впевнені, що хочете видалити цього клієнта? Всі його абонементи та історія будуть видалені.')
+    if (!isConfirmed) return
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      
+      navigate('/clients')
+    } catch (error) {
+      console.error('Помилка видалення клієнта:', error)
+      alert('Не вдалося видалити клієнта.')
+    }
   }
 
-  if (loading) return <div className="p-6 text-gray-500 animate-pulse">Завантаження...</div>
+  if (loading) return <div className="p-6 text-gray-500 animate-pulse">Завантаження профілю...</div>
   if (!client) return <div className="p-6 text-red-500">Клієнта не знайдено</div>
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 overflow-y-auto pb-20">
-      <div className="bg-white px-6 py-4 border-b border-gray-200 sticky top-0 z-10 flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
-          <ArrowLeft className="w-6 h-6" />
+    <div className="p-6 h-full flex flex-col bg-gray-50 overflow-y-auto pb-20">
+      
+      <div className="flex items-center justify-between mb-6">
+        <button 
+          onClick={() => navigate('/clients')}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" /> Назад
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Профіль</h1>
-      </div>
-
-      <div className="p-6 space-y-6">
-        {/* Client Header */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center text-blue-600">
-            <User className="w-8 h-8" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{client.full_name}</h2>
-            <p className="text-gray-500">{client.phone || client.email || 'Немає контактних даних'}</p>
-          </div>
-        </div>
-
-        {/* Membership Status */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-              <CreditCard className="w-4 h-4" /> Абонемент
-            </h3>
-            {activeMembership ? (
-              <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                Активний
-              </span>
-            ) : (
-              <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                Немає абонемента
-              </span>
-            )}
-          </div>
-
-          {activeMembership ? (
-            <div className="space-y-1">
-              <div className="font-bold text-xl text-gray-900">{activeMembership.membership_types.name}</div>
-              <div className="text-gray-500 text-sm">Дійсний до: <span className="font-semibold text-gray-900">{formatDate(activeMembership.end_date)}</span></div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm mb-4">У цього клієнта зараз немає активного абонемента.</p>
-          )}
-
+        <div className="flex gap-2">
+          {/* THE EDIT AND DELETE BUTTONS */}
           <button 
-            onClick={() => setIsModalOpen(true)}
-            className="mt-4 w-full bg-blue-50 text-blue-700 font-bold py-3 rounded-xl hover:bg-blue-100 transition-colors flex justify-center items-center gap-2"
+            onClick={() => setIsEditModalOpen(true)}
+            className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
           >
-            <Plus className="w-5 h-5" /> Призначити абонемент
+            <Edit className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={handleDeleteClient}
+            className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+          >
+            <Trash2 className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Assign Membership Modal */}
-      {isModalOpen && (
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+            <User className="w-8 h-8 text-gray-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{client.full_name}</h1>
+            <p className="text-gray-500 text-sm">Профіль клієнта</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-gray-700">
+            <Phone className="w-5 h-5 text-gray-400" />
+            <span className="font-medium">{client.phone || 'Номер не вказано'}</span>
+          </div>
+          <div className="flex items-center gap-3 text-gray-700">
+            <Mail className="w-5 h-5 text-gray-400" />
+            <span className="font-medium">{client.email || 'Email не вказано'}</span>
+          </div>
+        </div>
+      </div>
+
+      {isEditModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Новий абонемент</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-900">
+              <h2 className="text-xl font-bold">Редагувати клієнта</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-900">
                 <X className="w-6 h-6" />
               </button>
             </div>
             
-            <form onSubmit={handleAssignMembership} className="space-y-4">
+            <form onSubmit={handleUpdateClient} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Оберіть план</label>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {plans.map(plan => (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      onClick={() => setSelectedPlanId(plan.id)}
-                      className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${selectedPlanId === plan.id ? 'border-blue-600 bg-blue-50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}
-                    >
-                      <div className="font-bold text-gray-900">{plan.name}</div>
-                      <div className="text-sm text-gray-500">{plan.duration_days} днів • {plan.price} ₴</div>
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Повне ім'я *</label>
+                <input 
+                  required
+                  type="text" 
+                  value={editForm.full_name}
+                  onChange={(e) => setEditForm({...editForm, full_name: e.target.value})}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Номер телефону</label>
+                <input 
+                  type="tel" 
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Електронна пошта</label>
+                <input 
+                  type="email" 
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
               </div>
               
               <button 
                 type="submit" 
-                disabled={!selectedPlanId || isSubmitting}
-                className="w-full bg-blue-600 text-white font-bold p-3 rounded-xl hover:bg-blue-700 transition-colors mt-4 disabled:opacity-50"
+                disabled={isSubmitting}
+                className="w-full bg-blue-600 text-white font-medium p-3 rounded-xl hover:bg-blue-700 transition-colors mt-2 disabled:opacity-50"
               >
-                {isSubmitting ? 'Обробка...' : 'Призначити'}
+                {isSubmitting ? 'Збереження...' : 'Зберегти зміни'}
               </button>
             </form>
           </div>
